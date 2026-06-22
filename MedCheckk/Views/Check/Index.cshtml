@@ -1,0 +1,200 @@
+﻿@{
+    ViewData["Title"] = "Retsept tekshiruvi";
+}
+
+<div style="max-width:720px;margin:0 auto">
+    <div style="margin-bottom:28px">
+        <h1 style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;letter-spacing:-.5px">Retsept tekshiruvi</h1>
+        <p style="font-size:15px;color:var(--ink3);margin-top:6px">Kasalligingizni va dorilarni kiriting — tizim tahlil qiladi</p>
+    </div>
+
+    <form method="post" action="/Check/Analyze" id="mainForm">
+
+        <!-- 1. KASALLIK -->
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-title">1. Kasalligingizni kiriting</div>
+            <div class="card-sub">O'zbekcha yozing — masalan: bosh og'riq, diabet, shamollash</div>
+
+            <div id="diseaseSearchBox" style="position:relative">
+                <div class="search-wrap">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                    <input type="text" id="diseaseInput" placeholder="Kasallik nomini yozing..." autocomplete="off" />
+                </div>
+                <div class="dropdown" id="diseaseDd" style="display:none"></div>
+            </div>
+
+            <div id="selectedDiseaseBox" style="display:none;margin-top:12px;padding:14px 16px;background:var(--blue-l);border-radius:10px;align-items:center;justify-content:space-between">
+                <div>
+                    <div style="font-weight:600;color:var(--blue)" id="diseaseName">—</div>
+                    <div style="font-size:12px;color:var(--ink3);margin-top:2px" id="diseaseSymptoms"></div>
+                </div>
+                <button type="button" onclick="clearDisease()" style="border:none;background:rgba(37,99,235,.15);cursor:pointer;color:var(--blue);font-size:18px;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0">x</button>
+            </div>
+
+            <input type="hidden" name="DiseaseId" id="diseaseId" value="0" />
+        </div>
+
+        <!-- 2. DORILAR -->
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-title">2. Dorilarni kiriting</div>
+
+            <div class="card-sub" id="medHint">Dori nomini yozing — boshini yozsangiz yetarli</div>
+
+            <div class="chips" id="chipBox" style="margin-bottom:12px">
+                <span class="chips-hint" id="chipsHint">Hali dori tanlanmagan</span>
+            </div>
+
+            <div style="position:relative">
+                <div class="search-wrap">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                    <input type="text" id="medInput" autocomplete="off" />
+                </div>
+                <div class="dropdown" id="medDd" style="display:none"></div>
+            </div>
+
+            <div id="hiddenMeds"></div>
+        </div>
+
+        <!-- 3. IZOH -->
+        <div class="card" style="margin-bottom:24px">
+            <div class="card-title">3. Izoh (ixtiyoriy)</div>
+            <div style="margin-top:12px">
+                <textarea name="PatientNote" placeholder="Qo'shimcha ma'lumot — masalan: 3 kundan beri bosh og'riq, harorat 38.5..."></textarea>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:flex-end">
+            <a href="/" class="btn btn-ghost">Bekor qilish</a>
+            <button type="submit" class="btn btn-blue">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                Tahlil qilish
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    // ===== KASALLIK =====
+    let selDiseaseId = 0;
+    const diseaseInput  = document.getElementById('diseaseInput');
+    const diseaseDd     = document.getElementById('diseaseDd');
+    const diseaseSearch = document.getElementById('diseaseSearchBox');
+    const selDisBox     = document.getElementById('selectedDiseaseBox');
+    let dTimer;
+
+    diseaseInput.addEventListener('input', () => {
+      clearTimeout(dTimer);
+      dTimer = setTimeout(() => loadDiseases(diseaseInput.value.trim()), 220);
+    });
+    diseaseInput.addEventListener('focus', () => loadDiseases(diseaseInput.value.trim()));
+    diseaseInput.addEventListener('blur',  () => setTimeout(() => diseaseDd.style.display='none', 250));
+
+    async function loadDiseases(q) {
+      const r = await fetch('/Check/SearchDisease?q=' + encodeURIComponent(q));
+      const data = await r.json();
+      if (!data.length) { diseaseDd.style.display='none'; return; }
+      diseaseDd.innerHTML = data.map(d =>
+        `<div class="dd-item" onmousedown="pickDisease(${d.id},'${esc(d.nameUz)}','${esc(d.symptoms||'')}')">
+           <div class="dd-name">${d.nameUz}</div>
+           <div class="dd-meta">${(d.symptoms||'').split(',').slice(0,5).join(' · ')}</div>
+         </div>`).join('');
+      diseaseDd.style.display='block';
+    }
+
+    function pickDisease(id, name, symptoms) {
+      selDiseaseId = id;
+      document.getElementById('diseaseId').value = id;
+      document.getElementById('diseaseName').textContent = name;
+      document.getElementById('diseaseSymptoms').textContent = symptoms.split(',').slice(0,5).join(', ');
+      diseaseSearch.style.display = 'none';
+      selDisBox.style.display = 'flex';
+      diseaseDd.style.display = 'none';
+      document.getElementById('medHint').textContent = '"' + name + '" uchun dorilarni qidiring';
+    }
+
+    function clearDisease() {
+      selDiseaseId = 0;
+      document.getElementById('diseaseId').value = 0;
+      diseaseSearch.style.display = 'block';
+      selDisBox.style.display = 'none';
+      diseaseInput.value = '';
+      diseaseInput.focus();
+    }
+
+    // ===== DORILAR =====
+    const selMeds  = {};
+    const medInput = document.getElementById('medInput');
+    const medDd    = document.getElementById('medDd');
+    let mTimer;
+
+    medInput.addEventListener('input', () => {
+      clearTimeout(mTimer);
+      const q = medInput.value.trim();
+      if (!q) { medDd.style.display='none'; return; }
+      mTimer = setTimeout(() => loadMeds(q), 220);
+    });
+    medInput.addEventListener('blur', () => setTimeout(() => medDd.style.display='none', 250));
+
+    async function loadMeds(q) {
+      const r = await fetch('/Check/SearchMedicine?q=' + encodeURIComponent(q));
+      const data = await r.json();
+      if (!data.length) { medDd.style.display='none'; return; }
+      medDd.innerHTML = data.map(m =>
+        `<div class="dd-item" onmousedown="pickMed(${m.id},'${esc(m.name)}',${m.price},${m.requiresPrescription})">
+           <div class="dd-name">${hlght(m.name,q)} <span style="color:var(--ink3);font-weight:400">· ${m.genericName}</span></div>
+           <div class="dd-meta">
+             <span>${m.category}</span>
+             <span>${m.country||''}</span>
+             <span style="font-weight:600;color:var(--ink)">${fmt(m.price)} so'm</span>
+             <span class="badge ${m.isGeneric?'badge-generic':'badge-brand'}">${m.isGeneric?'Generic':'Brend'}</span>
+             <span class="badge ${m.requiresPrescription?'badge-rx':'badge-free'}">${m.requiresPrescription?'Rx':'Erkin'}</span>
+           </div>
+         </div>`).join('');
+      medDd.style.display='block';
+    }
+
+    function pickMed(id, name, price, rx) {
+      if (selMeds[id]) { medInput.value=''; medDd.style.display='none'; return; }
+      selMeds[id] = {name, price, rx};
+      renderChips();
+      medInput.value='';
+      medDd.style.display='none';
+    }
+
+    function removeMed(id) { delete selMeds[id]; renderChips(); }
+
+    function renderChips() {
+      const ids = Object.keys(selMeds);
+      document.getElementById('chipsHint').style.display = ids.length ? 'none' : 'inline';
+      document.querySelectorAll('.chip').forEach(c => c.remove());
+      ids.forEach(id => {
+        const m = selMeds[id];
+        const el = document.createElement('div');
+        el.className = 'chip';
+        el.innerHTML =
+          `<span>${m.name.length>38?m.name.slice(0,38)+'...':m.name}</span>` +
+          (m.rx ? '<span class="badge badge-rx" style="font-size:9px;padding:1px 5px">Rx</span>' : '') +
+          `<button class="chip-x" type="button" onclick="removeMed(${id})">x</button>`;
+        document.getElementById('chipBox').appendChild(el);
+      });
+      document.getElementById('hiddenMeds').innerHTML =
+        ids.map(id => `<input type="hidden" name="MedicineIds" value="${id}"/>`).join('');
+    }
+
+    // ===== HELPERS =====
+    function fmt(n) { return Number(n).toLocaleString('uz-UZ'); }
+    function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,' '); }
+    function hlght(text, q) {
+      const i = text.toLowerCase().indexOf(q.toLowerCase());
+      if (i<0) return text;
+      return text.slice(0,i)+'<strong style="color:var(--blue)">'+text.slice(i,i+q.length)+'</strong>'+text.slice(i+q.length);
+    }
+
+    // Submit validation
+    document.getElementById('mainForm').addEventListener('submit', function(e) {
+      const did = parseInt(document.getElementById('diseaseId').value);
+      const mids = Object.keys(selMeds);
+      if (!did) { e.preventDefault(); alert('Avval kasallikni tanlang!'); return; }
+      if (!mids.length) { e.preventDefault(); alert('Kamida 1 ta dori tanlang!'); }
+    });
+</script>
